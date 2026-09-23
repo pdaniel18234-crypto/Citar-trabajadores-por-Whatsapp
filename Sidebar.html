@@ -1,0 +1,149 @@
+<!--
+  IMPORTANTE: puedes personalizar el texto del mensaje en la función
+  construirMensaje() de más abajo. Actualmente genera:
+
+    Hola, NOMBRE
+    Mañana HORA
+    Parking de las furgos
+    Confirma por favor.
+-->
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    margin: 0;
+    padding: 10px;
+  }
+  #resumen {
+    margin-bottom: 10px;
+    color: #555;
+  }
+  .driver {
+    border-bottom: 1px solid #ddd;
+    padding: 10px 0;
+  }
+  .driver.enviado {
+    opacity: 0.35;
+  }
+  .nombre {
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  .hora {
+    color: #666;
+  }
+  .aviso {
+    color: #c0392b;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  button {
+    margin-top: 6px;
+    margin-right: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #f5f5f5;
+  }
+  button.enviar {
+    background: #25D366;
+    color: white;
+    border: none;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+</style>
+
+<div id="resumen">Cargando conductores...</div>
+<div id="lista"></div>
+
+<script>
+  function cargar() {
+    google.script.run.withSuccessHandler(mostrar).withFailureHandler(mostrarError).getPendingDrivers();
+  }
+
+  function mostrarError(err) {
+    document.getElementById('resumen').innerText = 'Error: ' + err.message;
+  }
+
+  function mostrar(drivers) {
+    const resumen = document.getElementById('resumen');
+    const cont = document.getElementById('lista');
+    cont.innerHTML = '';
+
+    if (drivers.length === 0) {
+      resumen.innerText = 'No quedan conductores pendientes.';
+      return;
+    }
+
+    resumen.innerText = drivers.length + ' conductor(es) pendiente(s).';
+
+    drivers.forEach(function (d) {
+      const div = document.createElement('div');
+      div.className = 'driver';
+      div.id = 'row-' + d.row;
+
+      const nombreDiv = document.createElement('div');
+      nombreDiv.className = 'nombre';
+      nombreDiv.innerText = d.nombre;
+      div.appendChild(nombreDiv);
+
+      const horaDiv = document.createElement('div');
+      horaDiv.className = 'hora';
+      horaDiv.innerText = 'Mañana ' + d.hora;
+      div.appendChild(horaDiv);
+
+      const btnEnviar = document.createElement('button');
+      btnEnviar.className = 'enviar';
+      btnEnviar.innerText = 'Enviar WhatsApp';
+      btnEnviar.onclick = function () { enviar(d); };
+
+      if (d.faltaTelefono) {
+        const aviso = document.createElement('div');
+        aviso.className = 'aviso';
+        aviso.innerText = '⚠️ Falta el teléfono en la hoja (columna B)';
+        div.appendChild(aviso);
+        btnEnviar.disabled = true;
+      }
+
+      div.appendChild(btnEnviar);
+
+      const btnMarcar = document.createElement('button');
+      btnMarcar.innerText = 'Marcar enviado';
+      btnMarcar.onclick = function () { marcar(d.row, div, btnEnviar, btnMarcar); };
+      div.appendChild(btnMarcar);
+
+      cont.appendChild(div);
+    });
+  }
+
+  function construirMensaje(d) {
+    const primerNombre = d.nombre.split(' ')[0];
+    return 'Hola, ' + primerNombre +
+      '\nMañana ' + d.hora +
+      '\nParking de las furgos' +
+      '\nConfirma por favor.';
+  }
+
+  function enviar(d) {
+    if (d.faltaTelefono) return;
+    const texto = encodeURIComponent(construirMensaje(d));
+    const url = 'https://wa.me/' + d.telefono + '?text=' + texto;
+    // Ojo: siempre el mismo nombre de ventana ("waTab") para reutilizar
+    // la misma pestaña de WhatsApp Web en vez de abrir una nueva cada vez.
+    window.open(url, 'waTab');
+  }
+
+  function marcar(row, div, btnEnviar, btnMarcar) {
+    btnEnviar.disabled = true;
+    btnMarcar.disabled = true;
+    google.script.run.withSuccessHandler(function () {
+      div.classList.add('enviado');
+    }).marcarEnviado(row);
+  }
+
+  cargar();
+</script>
